@@ -1,15 +1,25 @@
-FROM eclipse-temurin:17-jdk-alpine
-
+# Stage 1: Build
+FROM eclipse-temurin:21-jdk-jammy AS builder
 WORKDIR /app
 
-COPY .mvn/ .mvn
-COPY mvnw pom.xml ./
-RUN ./mvnw dependency:go-offline
+# 1. Copy hanya file yang diperlukan untuk build
+COPY pom.xml .
+COPY .mvn .mvn
+COPY mvnw .
+COPY src src
 
-COPY src ./src
+# 2. Download dependencies terlebih dahulu (cache layer)
+RUN ./mvnw dependency:go-offline -B
 
+# 3. Build aplikasi
 RUN ./mvnw package -DskipTests
 
-EXPOSE 8080
+# Stage 2: Runtime
+FROM eclipse-temurin:21-jre-jammy
+WORKDIR /app
 
-CMD ["java", "-jar", "target/*.jar"]
+# 4. Copy hanya file JAR yang diperlukan
+COPY --from=builder /app/target/*.jar app.jar
+
+# 5. Gunakan entrypoint yang lebih aman
+ENTRYPOINT ["sh", "-c", "java ${JAVA_OPTS} -jar app.jar"]
